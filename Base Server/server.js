@@ -4,12 +4,22 @@
 // =============================================================================
 
 // call the packages we need
-var express    = require('express');        // call express
-var app        = express();                 // define our app using express
+var express = require('express');        // call express
+var app = express();                 // define our app using express
 var bodyParser = require('body-parser');
-var mongoose   = require('mongoose');
-mongoose.connect('mongodb://localhost:27017/db'); // connect to our database
-var Employee     = require('./models/employee');
+var MongoClient = require('mongodb').MongoClient;
+var url = "mongodb://localhost:27017/mydb";
+
+MongoClient.connect(url, function (err, db) {
+    if (err) throw err;
+    console.log("Database created!");
+    var dbo = db.db("mydb");
+    dbo.createCollection("employees", function (err, res) {
+        if (err) throw err;
+        console.log("Collection created!");
+        db.close();
+    });
+});
 
 // configure app to use bodyParser()
 // this will let us get the data from a POST
@@ -23,7 +33,7 @@ var port = process.env.PORT || 8080;        // set our port
 var router = express.Router();              // get an instance of the express Router
 
 // middleware to use for all requests
-router.use(function(req, res, next) {
+router.use(function (req, res, next) {
     res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
     res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -33,76 +43,77 @@ router.use(function(req, res, next) {
 });
 
 // test route to make sure everything is working (accessed at GET http://localhost:8080/api)
-router.get('/', function(req, res) {
-    res.json({ message: 'Successful Server Hit!' });   
+router.get('/', function (req, res) {
+    res.json({ message: 'Successful Server Hit!' });
 });
 router.route('/AddEmployee')
-
-    // create an employee
-    .post(function(req, res) {
-        
-        var employee = new Employee();      // create a new instance of the Employee model
-        employee.name = req.body.name;  // set the employees name (comes from the request)
-
-        // save the employee and check for errors
-        employee.save(function(err) {
-            if (err)
-                res.send(err);
-
-            res.json({ message: 'Employee created!' });
-        });
-        
-    })
-    router.route('/getEmployees').get(function(req, res) {
-        Employee.find(function(err, employees) {
-            if (err)
-                res.send(err);
-
-            res.json(employees);
-        });
-    });
-    router.route('/getEmployee/:employee_id')
-
-    // get the employee with that id
-    .get(function(req, res) {
-        Employee.findById(req.params.employee_id, function(err, employee) {
-            if (err)
-                res.send(err);
-            res.json(employee);
-        });
-    });
-    router.route('/updateEmployee/:employee_id')
-    .put(function(req, res) {
-
-        // use employee model to find the employee we want
-        Employee.findById(req.params.employee_id, function(err, employee) {
-
-            if (err)
-                res.send(err);
-
-            employee.name = req.body.name;  // update the employees info
-
-            // save the employee
-            employee.save(function(err) {
-                if (err)
-                    res.send(err);
-
-                res.json({ message: 'Employee updated!' });
+    .post(function (req, res) {
+        const employee = {
+            name: req.body.name,
+        }
+        MongoClient.connect(url, function (err, db) {
+            if (err) throw err;
+            var dbo = db.db("mydb");
+            dbo.collection("employee").insertOne(employee, function (err, res) {
+                if (err) throw err;
+                console.log("1 document inserted");
+                db.close();
             });
+        });
+    });
+router.route('/getEmployees').get(function (req, res) {
 
+    MongoClient.connect(url, function (err, db) {
+        if (err) throw err;
+        var dbo = db.db("mydb");
+        dbo.collection("employees").find({}).toArray(function (err, result) {
+            if (err) throw err;
+            console.log(result);
+            db.close();
+        });
+    });
+});
+router.route('/getEmployee/:employee_id')
+    .get(function (req, res) {
+        MongoClient.connect(url, function (err, db) {
+            if (err) throw err;
+            var dbo = db.db("mydb");
+            var query = {
+                _id: req.params.employee_id,
+            }
+            dbo.collection("employees").findOne(query, function (err, result) {
+                if (err) throw err;
+                console.log(result.name);
+                db.close();
+            });
+        });
+    });
+router.route('/updateEmployee/:employee_id')
+    .put(function (req, res) {
+        MongoClient.connect(url, function (err, db) {
+            if (err) throw err;
+            var dbo = db.db("mydb");
+            var myquery = { _id: req.params.employee_id };
+            var newvalues = { $set: req.body };
+            dbo.collection("customers").updateOne(myquery, newvalues, function (err, res) {
+                if (err) throw err;
+                console.log("1 document updated");
+                db.close();
+            });
         });
     });
 
-    router.route('/deleteEmployee/:employee_id')
-    // delete the employee with this id
-    .delete(function(req, res) {
-        Employee.remove({
-            _id: req.params.employee_id
-        }, function(err, employee) {
-            if (err)
-                res.send(err);
-
-            res.json({ message: 'Successfully deleted' });
+router.route('/deleteEmployee/:employee_id')
+    .delete(function (req, res) {
+        MongoClient.connect(url, function (err, db) {
+            if (err) throw err;
+            var dbo = db.db("mydb");
+            var myquery = { _id: req.params.employee_id };
+            dbo.collection("customers").deleteOne(myquery, function (err, obj) {
+                if (err) throw err;
+                console.log("1 document deleted");
+                db.close();
+            });
         });
     });
 
