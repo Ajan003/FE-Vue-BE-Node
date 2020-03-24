@@ -10,14 +10,16 @@ var bodyParser = require('body-parser');
 var MongoClient = require('mongodb').MongoClient;
 var url = "mongodb://localhost:27017/mydb";
 
-MongoClient.connect(url, function (err, db) {
+let dataBase
+let dataBaseObject
+MongoClient.connect(url, (err, db) => {
     if (err) throw err;
     console.log("Database created!");
-    var dbo = db.db("mydb");
-    dbo.createCollection("employees", function (err, res) {
+    dataBase = db
+    dataBaseObject = db.db("mydb");
+    dataBaseObject.createCollection("employees", (err, res) => {
         if (err) throw err;
         console.log("Collection created!");
-        db.close();
     });
 });
 
@@ -33,7 +35,7 @@ var port = process.env.PORT || 8080;        // set our port
 var router = express.Router();              // get an instance of the express Router
 
 // middleware to use for all requests
-router.use(function (req, res, next) {
+router.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
     res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -43,82 +45,64 @@ router.use(function (req, res, next) {
 });
 
 // test route to make sure everything is working (accessed at GET http://localhost:8080/api)
-router.get('/', function (req, res) {
+router.get('/', (req, res) => {
     res.json({ message: 'Successful Server Hit!' });
 });
 router.route('/AddEmployee')
-    .post(function (req, res) {
+    .post((req, res) => {
         const employee = {
             id: req.body.id,
             name: req.body.name,
         }
-        MongoClient.connect(url, function (err, db) {
+        dataBaseObject.collection("employees").insertOne(employee, (err, result) => {
             if (err) throw err;
-            var dbo = db.db("mydb");
-            dbo.collection("employees").insertOne(employee, function (err, result) {
-                if (err) throw err;
-                res.json({ message: '1 document inserted!' });
-                db.close();
-            });
+            res.json({ message: '1 document inserted!' });
         });
     });
-router.route('/getEmployees').get(function (req, res) {
-    MongoClient.connect(url, function (err, db) {
+router.route('/getEmployees').get((req, res) => {
+    dataBaseObject.collection("employees").find({}).toArray((err, result) => {
         if (err) throw err;
-        var dbo = db.db("mydb");
-        dbo.collection("employees").find({}).toArray(function (err, result) {
-            if (err) throw err;
-            console.log(result);
-            res.json(result)
-            db.close();
-        });
+        console.log(result);
+        res.json(result)
     });
 });
 router.route('/getEmployee/:employee_id')
-    .get(function (req, res) {
-        MongoClient.connect(url, function (err, db) {
+    .get((req, res) => {
+        var query = {
+            id: +req.params.employee_id,
+        }
+        console.log(query)
+        dataBaseObject.collection("employees").findOne(query, (err, result) => {
             if (err) throw err;
-            var dbo = db.db("mydb");
-            var query = {
-                id: +req.params.employee_id,
-            }
-            console.log(query)
-            dbo.collection("employees").findOne(query, function (err, result) {
-                if (err) throw err;
-                console.log(result.name);
-                res.json(result)
-                db.close();
-            });
+            console.log(result);
+            res.json(result)
         });
     });
-router.route('/updateEmployee/:employee_id')
-    .put(function (req, res) {
-        MongoClient.connect(url, function (err, db) {
+router.route('/updateEmployee')
+    .put((req, res) => {
+        var myquery = { id: +req.body.id };
+        var newvalues = { $set: { name: req.body.name } };
+        dataBaseObject.collection("employees").updateOne(myquery, newvalues, (err, result) => {
             if (err) throw err;
-            var dbo = db.db("mydb");
-            var myquery = { id: +req.params.employee_id };
-            var newvalues = { $set: { name: req.body.name } };
-            dbo.collection("employees").updateOne(myquery, newvalues, function (err, result) {
-                if (err) throw err;
-                res.json({ message: '1 document updated!' });
-                db.close();
-            });
+            res.json({ message: '1 document updated!' });
         });
     });
 
-router.route('/deleteEmployee/:employee_id')
-    .delete(function (req, res) {
-        MongoClient.connect(url, function (err, db) {
+router.route('/deleteEmployee')
+    .delete((req, res) => {
+        var myquery = { id: +req.body.id };
+        dataBaseObject.collection("employees").deleteOne(myquery, (err, obj) => {
             if (err) throw err;
-            var dbo = db.db("mydb");
-            var myquery = { id: +req.params.employee_id };
-            dbo.collection("employees").deleteOne(myquery, function (err, obj) {
-                if (err) throw err;
-                res.json({ message: '1 document deleted!' });
-                db.close();
-            });
+            res.json({ message: '1 document deleted!' });
         });
     });
+
+process.on('SIGINT', function () {
+    dataBase.close(function () {
+        console.log('MongoClient disconnected on app termination');
+        process.exit(0);
+    });
+});
 
 
 // more routes for our API will happen here
